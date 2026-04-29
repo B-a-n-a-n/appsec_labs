@@ -24,6 +24,9 @@ RUN pip install --upgrade pip && \
 FROM python:3.11-slim
 WORKDIR /app
 
+# Создаем непривилегированного пользователя
+RUN useradd -m dashboard_user
+
 # Нам нужны только базовые библиотеки SDL2 для запуска (без gcc)
 RUN apt-get update && apt-get install -y \
     libsdl2-2.0-0 \
@@ -39,6 +42,8 @@ RUN pip install --no-index --find-links=/wheels -r requirements.txt
 
 COPY pygamesteel_from_lab_2.py .
 
+# Переключаемся на пользователя
+USER dashboard_user
 ENV PYTHONUNBUFFERED=1
 
 CMD ["python", "pygamesteel_from_lab_2.py"]
