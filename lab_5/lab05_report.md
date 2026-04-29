@@ -1,680 +1,736 @@
-# Отчет по лабораторной работе №5
+# Лабораторная работа №5 — Docker — контейнеризация приложений
 
-## Выполненные задания
+**Автор:** Матвеичев Андрей
+**Группа:** М03-503
+**Дата:** 2026-04-29
 
-### Задание 1: Установка Docker и buildkit
+***
 
-**Статус:** Docker и buildx уже установлены на сервере, установка не требовалась
+## Цель работы
 
-**Проверка установки:**
-```bash
-$ docker --version
-Docker version 27.4.1, build b9d17ea
+Данная лабораторная работа посвящена изучению Docker и как с ним работать. Эта лабораторная работа послужит подпоркой для старта в выявлении и определении уязвимостей на уровне сканирования контейнеров при сборке приложений.
 
-$ docker buildx version
-github.com/docker/buildx v0.19.3 48d6a39
+***
+
+## Ход выполнения
+
+### Шаг 0. 
+
+Обновим систему и сделаем pull для репозитория
+
+```
+sudo dnf update; sudo dnf upgrade
+git pull origin master
+```
+можно работать.
+
+### Шаг 1. Подготовка docker
+
+Контейнер — изолированная среда для запуска приложения, которая включает код, зависимости и конфигурацию. В отличие от виртуальной машины, контейнер не содержит собственного ядра ОС — он использует ядро хост-системы.
+
+Установим Docker с buildkit:
+```
+sudo dnf install -y docker docker-compose
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER
+```
+проверим
+```
+docker --version
+docker run hello-world
+```
+вывод:
+```
+Docker version 29.4.0, build 1.fc43
+
+Hello from Docker!
+This message shows that your installation appears to be working correctly.
+
+To generate this message, Docker took the following steps:
+ 1. The Docker client contacted the Docker daemon.
+ 2. The Docker daemon pulled the "hello-world" image from the Docker Hub.
+    (amd64)
+ 3. The Docker daemon created a new container from that image which runs the
+    executable that produces the output you are currently reading.
+ 4. The Docker daemon streamed that output to the Docker client, which sent it
+    to your terminal.
+
+To try something more ambitious, you can run an Ubuntu container with:
+ $ docker run -it ubuntu bash
+
+Share images, automate workflows, and more with a free Docker ID:
+ https://hub.docker.com/
+
+For more examples and ideas, visit:
+ https://docs.docker.com/get-started/
+```
+docker настроен и готов к работе.
+
+Скопируем данные lab05 в нашу папку.
+```
+cp -r ~/path_to_example/lab05 ~/Documents/lab_5 
+```
+сделаем commit, обновим данные
+```
+git add -A
+git commit -S -m "Начали 5 лабу"
 ```
 
-**Команды для установки через apt (если бы требовалась установка):**
+### Шаг 2. Изучение базовых команд.
 
-```bash
-# Обновление списка пакетов
-$ sudo apt-get update
-
-# Установка зависимостей
-$ sudo apt-get install -y ca-certificates curl gnupg lsb-release
-
-# Добавление официального GPG ключа Docker
-$ sudo mkdir -p /etc/apt/keyrings
-$ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
-# Добавление репозитория Docker
-$ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Установка Docker Engine, CLI, Containerd и Docker Compose
-$ sudo apt-get update
-$ sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-# Проверка установки
-$ docker --version
-$ docker buildx version
+выполним:
 ```
-
-**Примечание:** 
-- На Linux сервере используется Docker, установленный через пакетный менеджер `apt`
-- Команда `brew` из задания предназначена для macOS и не работает на Linux без предварительной установки Homebrew
-- На данном сервере Docker уже был установлен ранее, поэтому установка не выполнялась
-
----
-
-### Задание 2: Команды docker buildx и docker run
-
-#### Сборка образа
-
-```bash
-$ cd /root/course_labs/labs/lab05/source
-$ docker buildx build -t hello-appsec-world .
+cd source
+docker buildx build -t hello-appsec-world .
+docker run hello-appsec-world
+docker run --rm -it hello-appsec-world
 ```
-
-**Анализ команды:**
-- `docker buildx build` - использует buildkit для сборки образа
-- `-t hello-appsec-world` - задает имя и тег образа
-- `.` - указывает на текущую директорию как контекст сборки (ищет Dockerfile)
-
-**Результат:** Образ успешно собран
-
-#### Запуск контейнера
-
-```bash
-$ docker run hello-appsec-world
+на выводе видим build процесс. система собираем нужные pip модули. Выдает WARNING о том, что мы запускаем программу с root аккаунта.
+после этого программа выводит:
 ```
-
-**Анализ команды:**
-- `docker run` - создает и запускает новый контейнер из образа
-- `hello-appsec-world` - имя образа для запуска
-- Контейнер выполняется, выводит результат и завершается
-
-**Результат:** Выведено "hello appsec world" с цветным форматированием (ANSI коды цветов: [91m, [92m, [93m, [94m, [95m)
-
-#### Запуск контейнера в интерактивном режиме
-
-```bash
-$ docker run --rm -it hello-appsec-world
-```
-
-**Анализ команды:**
-- `--rm` - автоматически удаляет контейнер после завершения
-- `-it` - интерактивный режим с псевдо-TTY
-- **Примечание:** При выполнении через SSH без TTY может возникнуть ошибка "the input device is not a TTY"
-
-#### Сохранение образа в архив
-
-```bash
-$ docker save -o hello.tar hello-appsec-world
-$ docker load -i hello.tar
-```
-
-**Анализ команд:**
-- `docker save` - сохраняет образ в tar архив
-- `-o hello.tar` - имя выходного файла
-- `docker load` - загружает образ из tar архива
-- Используется для переноса образов между системами
-
-**Результат:** Образ сохранен в файл hello.tar (размер 134MB)
-
----
-
-### Задание 3: Анализ Dockerfile
-
-**Текущий Dockerfile:**
-
-```dockerfile
-FROM python:3.11-slim AS builder
-WORKDIR /hello
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip wheel --wheel-dir=/wheels -r requirements.txt
-
-FROM python:3.11-slim 
-WORKDIR /hello
-COPY --from=builder /wheels /wheels 
-COPY requirements.txt .
-RUN pip install --no-index --find-links=/wheels -r requirements.txt
-COPY hello.py .
-
-ENV PYTHONUNBUFFERED=1
-CMD ["python", "hello.py"]
-```
-
-**Анализ Dockerfile:**
-
-1. **Многоэтапная сборка (Multi-stage build):**
-   - Этап 1 (`builder`): Установка зависимостей в wheel-пакеты
-   - Этап 2: Финальный образ с минимальным размером
-
-2. **Преимущества:**
-   - Уменьшение размера финального образа (не включаются инструменты сборки)
-   - Кеширование зависимостей через wheel-пакеты
-   - Безопасность: меньше уязвимостей в финальном образе
-
-3. **Проблемы безопасности:**
-   - Запуск от root пользователя (нет USER директивы)
-   - Нет ограничений ресурсов
-   - Нет проверки целостности зависимостей
-
-**Commit:** Выполнен ранее - коммит `b6a78e1` (Lab05: задание 2 - сохранен образ hello-appsec-world в hello.tar)
-
----
-
-### Задание 4: Замена скрипта на свой из предыдущих лабораторных работ
-
-**Изменения:**
-- Заменен `hello.py` на скрипт из корня репозитория (`/root/course_labs/hello.py`), созданный в lab01
-- Скопирован файл `hello.py` в директорию `source/`
-- Обновлен Dockerfile для использования скопированного скрипта
-- Обновлен `requirements.txt` (если требуются дополнительные библиотеки)
-
-**Содержимое hello.py из lab01:**
-- Функция `hello_world()` - выводит "Hello AppSec World!"
-- Функция `hello_user(name)` - выводит "Hello AppSec World from {name}!"
-- Функция `interactive_greeting()` - интерактивное приветствие с запросом имени
-- Функции для получения информации о системе
-
-**Измененный Dockerfile:**
-
-```dockerfile
-FROM python:3.11-slim AS builder
-WORKDIR /hello
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip wheel --wheel-dir=/wheels -r requirements.txt
-
-FROM python:3.11-slim 
-WORKDIR /hello
-COPY --from=builder /wheels /wheels 
-COPY requirements.txt .
-RUN pip install --no-index --find-links=/wheels -r requirements.txt
-COPY hello.py .
-
-ENV PYTHONUNBUFFERED=1
-CMD ["python", "hello.py"]
-```
-
-**Анализ изменений:**
-- Используется скрипт `hello.py` из корня репозитория (создан в lab01)
-- Скрипт содержит функции для работы с пользователем (hello_world, hello_user, interactive_greeting)
-- Dockerfile обновлен: заменено `COPY typersteel.py .` на `COPY hello.py .`
-- CMD изменен с `["python", "typersteel.py"]` на `["python", "hello.py"]`
-
-**Анализ измененного Dockerfile:**
-- Многоэтапная сборка сохранена для оптимизации
-- Скрипт `hello.py` копируется в образ
-- Запуск через `CMD ["python", "hello.py"]`
-- **Проблема:** hello.py использует `input()` для интерактивного ввода, что вызывает EOFError при неинтерактивном запуске
-
-**Результат сборки:**
-```bash
-$ docker buildx build -t hello-appsec-world .
-# Образ успешно собран: sha256:42cab5e27bf24914df59b647b4fbae6e0d4605d9a0ca78844e501bef2f10f381
-```
-
-**Результат запуска (до исправления):**
-```bash
-$ docker run --rm hello-appsec-world
-Введите ваше имя: Traceback (most recent call last):
-  File "/hello/hello.py", line 66, in <module>
-    main()
-  File "/hello/hello.py", line 61, in main
-    interactive_greeting()
-  File "/hello/hello.py", line 46, in interactive_greeting
-    name = input("Введите ваше имя: ")
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-EOFError: EOF when reading a line
-```
-
-**Исправление:**
-В функции `main()` заменен вызов `interactive_greeting()` на `hello_world()` для работы в неинтерактивном режиме Docker.
-
-**Результат запуска (после исправления):**
-```bash
-$ docker run --rm hello-appsec-world
 Hello AppSec World!
-Python version: 3.11.14 (main, Dec  8 2025, 23:39:47) [GCC 14.2.0]
+Python version: 3.11.15 (main, Apr 22 2026, 02:06:58) [GCC 14.2.0]
 Platform: linux
-Current time: 2025-12-13 11:37:39
+Current time: 2026-04-29 10:38:22
+Hello AppSec World!
+Python version: 3.11.15 (main, Apr 22 2026, 02:06:58) [GCC 14.2.0]
+Platform: linux
+Current time: 2026-04-29 10:38:24
+```
+как видно `build` собирает образ из текущей директории и тегирует его именем `hello-appsec-world`, `run` - создает и запускает контейнер `run --rm -it` запускает контейнер интерактивно, после чего удаляет.
+
+далее выполним:
+```
+docker save -o hello.tar hello-appsec-world
+```
+(сохраняет слои образа в tar-архив)
+```
+docker load -i hello.tar
+```
+(загружает образ - `Loaded image: hello-appsec-world:latest`) 
+```
+docker load -i image.tar
+```
+ошибка: `open image.tar: no such file or directory`, название указано неправильно и образ не загрузился.
+
+### Шаг 3.
+```
+cat Dockerfile
+cat requirements.txt
+```
+видим
+- базовый образ: python:3.11-slim. официальный образ, пиннинг версии присутствует (тег 3.11-slim).
+- multi-stage build: да. первый этап собирает зависимости (wheels), второй — копирует только готовые пакеты. Это уменьшает размер образа и исключает попадание компиляторов в итоговый контейнер, что снижает вектор атак.
+- Инструкция USER: отсутствует. приложение запускается от root, что критически небезопасно.
+- копирование файлов: используется точечное копирование (COPY requirements.txt ., COPY hello.py .), а не слепое COPY . .., что правильно.
+- .dockerignore: отсутствует. без него есть риск скопировать секреты из локальной директории (например, .env).
+- секреты: В самом Dockerfile пароли не захардкожены.
+- пиннинг зависимостей: В примере requirements.txt версии не зафиксированы.
+
+### Шаг 4. .dockerignore
+```
+vi .dockerignore
+```
+сравним образы с помощью команды
+```
+docker images | grep hello-appsec-world
+```
+видим 
+```
+# до
+hello-appsec-world:latest   97a08cc2fc11        213MB           53MB   U    
+# после
+hello-appsec-world-2:latest   7dfe1c01f027        213MB           53MB   U    
+```
+размер файла не изменился, так как мы в него особо ничего и не добавляли до этого, gitignore в данном случае это хорошая практика на будущее.
+
+без .dockerignore контекст сборки передает демону Docker всю директорию целиком. туда могут попасть папки .git (история коммитов), __pycache__ (мусор), и файлы с секретами .env. это не только раздувает размер образа, но и может привести к утечке критичных данных.
+
+### Шаг 5. Свой python скрипт
+
+Для простоты возьмем файл из 2 лабы.
+```
+cp ../../lab_2/pygamesteel_fixed.py pygamesteel_from_lab_2.py
+```
+нам придется сделать заглушку дял экрана, так как docker не видит его. Так же добавим выводы в терминал для наглядности:
+```python
+import pygame
+import os
+
+# Фикс для запуска в Docker без X-сервера (монитора)
+os.environ['SDL_VIDEODRIVER'] = 'dummy'
+
+pygame.init()
+
+screen_width = 800
+screen_height = 600
+window_size = (screen_width, screen_height)
+screen = pygame.display.set_mode(window_size) 
+
+bg_color = (255, 255, 255)
+font = pygame.font.SysFont(None, 75)
+text = font.render("Hello appsec world*", True, (0, 255, 0))
+text_rect = text.get_rect()
+text_rect.center = (400, 300)
+
+# Для Docker сделаем ограничение: выполним 100 итераций и выйдем
+# Иначе контейнер будет крутиться вечно
+running_count = 0
+running = True
+while running and running_count < 100:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+    screen.fill(bg_color)
+    screen.blit(text, text_rect)
+    pygame.display.flip() 
+    running_count += 1
+    if running_count % 20 == 0:
+        print(f"Frame {running_count} rendered successfully")
+
+print("Pygame work finished successfully!")
+pygame.quit()
 ```
 
-**Примечание:** После исправления скрипт работает корректно в Docker контейнере без интерактивного ввода.
-
-**Commit:** Выполнен коммит `cfc403c` с изменениями Dockerfile и hello.py
-
----
-
-### Задание 5: Повторная сборка и сравнение хеш-сумм
-
-```bash
-$ docker buildx build -t hello-appsec-world .
-$ docker run hello-appsec-world
-$ docker save -o hello_your_project.tar hello-appsec-world
-$ docker load -i hello_your_project.tar
-$ docker run hello-appsec-world
-$ docker load -i image.tar
-$ docker run hello-appsec-world
+Добавим pygame в requirements:
+```
+pygame==2.5.2
 ```
 
-**Анализ команд:**
-- Повторная сборка образа с новым скриптом
-- Сохранение образа в архив `hello_your_project.tar`
-- Загрузка и сравнение с оригинальным образом `image.tar`
+Обновим Dockerfile:
+```
+# Этап 1: Сборка (Builder)
+FROM python:3.11-slim AS builder
+WORKDIR /app
 
-**Сравнение хеш-сумм:**
-```bash
-$ sha256sum hello_your_project.tar
-$ sha256sum image.tar
+# Устанавливаем системные зависимости для сборки pygame
+RUN apt-get update && apt-get install -y \
+    gcc \
+    python3-dev \
+    libsdl2-dev \
+    libsdl2-image-dev \
+    libsdl2-mixer-dev \
+    libsdl2-ttf-dev \
+    libfreetype6-dev \
+    libportmidi-dev \
+    libjpeg-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+# Собираем wheel-пакеты
+RUN pip install --upgrade pip && \
+    pip wheel --wheel-dir=/wheels -r requirements.txt
+
+# Этап 2: Финальный образ
+FROM python:3.11-slim
+WORKDIR /app
+
+# Нам нужны только базовые библиотеки SDL2 для запуска (без gcc)
+RUN apt-get update && apt-get install -y \
+    libsdl2-2.0-0 \
+    libsdl2-image-2.0-0 \
+    libsdl2-mixer-2.0-0 \
+    libsdl2-ttf-2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Копируем и устанавливаем собранные пакеты
+COPY --from=builder /wheels /wheels
+COPY requirements.txt .
+RUN pip install --no-index --find-links=/wheels -r requirements.txt
+
+COPY pygamesteel_from_lab_2.py .
+
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python", "pygamesteel_from_lab_2.py"]
+```
+делаем commit и переходим к следующему шагу:
+```
+git add -A
+git commit -S -m "Обновили Dockerfile для работы с файлом из 2 лабы, обновили сам скрипт pygamesteel_from_lab_2.py для совместимости с docker"
 ```
 
-**Результат выполнения команд:**
-```bash
-$ docker buildx build -t hello-appsec-world .
-# Образ успешно собран
-
-$ docker run hello-appsec-world
-# Ошибка EOFError (требуется интерактивный ввод)
-
-$ docker save -o hello_your_project.tar hello-appsec-world
-# Образ сохранен в hello_your_project.tar (размер 149MB)
-
-$ docker load -i hello_your_project.tar
-Loaded image: hello-appsec-world:latest
-
-$ docker run hello-appsec-world
-# Ошибка EOFError (требуется интерактивный ввод)
+### Шаг 6. Сохранение в файлы
+```
+docker buildx build -t hello-appsec-world .
+```
+build прошел успешно за 461.6s, тестируем:
+```
+docker run hello-appsec-world
+```
+вывод:
+```
+pygame 2.5.2 (SDL 2.28.2, Python 3.11.15)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+ALSA lib conf.c:5205:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
+ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
+ALSA lib conf.c:5205:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory
+ALSA lib confmisc.c:1342:(snd_func_refer) error evaluating name
+ALSA lib conf.c:5205:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
+ALSA lib conf.c:5728:(snd_config_expand) Evaluate error: No such file or directory
+ALSA lib pcm.c:2722:(snd_pcm_open_noupdate) Unknown PCM default
+Frame 20 rendered successfully
+Frame 40 rendered successfully
+Frame 60 rendered successfully
+Frame 80 rendered successfully
+Frame 100 rendered successfully
+Pygame work finished successfully!
+```
+как видно, не без ошибок, но программа работает, выводит расставленные маркеры и завершает работу.
+сохраним файл:
+```
+docker save -o hello_your_project.tar hello-appsec-world
 ```
 
-**Сравнение хеш-сумм:**
-```bash
-$ sha256sum hello_your_project.tar
-2957d3a9b93c156b0a799edd1d99018adbf527f21149396a287c02ec1ed56996  hello_your_project.tar
-
-$ sha256sum hello.tar
-efdfa26a3af495d05da0933f14fd5ac7347197c64753f48dc756600c41a3911e  hello.tar
+попробуйем загрузить из файла:
 ```
-
-**Анализ:** Хеш-суммы различаются, так как:
-- `hello.tar` - образ с оригинальным hello.py из source (цветной вывод)
-- `hello_your_project.tar` - образ с hello.py из корня репозитория (интерактивный ввод)
-- `image.tar` из репозитория не найден в директории lab05
-
-**Размеры архивов:**
-- `hello.tar`: 134MB
-- `hello_your_project.tar`: 149MB (больше из-за дополнительных библиотек flask и requests)
-
----
-
-### Задание 6: Доработка скрипта с библиотеками
-
-**Изменения в requirements.txt:**
-
+docker load -i hello_your_project.tar
+docker run hello-appsec-world
 ```
-flask==2.2.3
+файл успешно выполняется, мы пропускаем долгий build процесс.
+
+К сожалению, image.tar в репозитории нет, поэтому сравним с hello.tar, собранным нами ранее.
+```
+docker load -i hello.tar
+docker run hello-appsec-world
+```
+видим вывод:
+```
+Hello AppSec World!
+Python version: 3.11.15 (main, Apr 22 2026, 02:06:58) [GCC 14.2.0]
+Platform: linux
+Current time: 2026-04-29 12:05:10
+```
+вывод с сохраненного hello.tar
+
+хэш суммы проектов:
+```
+sha256sum hello.tar
+sha256sum hello_your_project.tar
+```
+вывод:
+```
+cfd0958fd976f229b3d22af932cbdf334bf318593b7c93e6031d76e06b40eeb0  hello.tar
+7659dcbb6524fb2f0b9375485ef3d2132dfea545d9b24e4d0866caeb390c9b17  hello_your_project.tar
+```
+видно, то файлы отличаются.
+
+
+### Шаг 7. еще библиотеки
+
+добавим новую библиотеку
+```
 requests==2.28.1
 ```
 
-**Анализ:**
-- Добавлены библиотеки для расширения функциональности скрипта `hello.py`
-- `flask==2.2.3` - для создания веб-приложения (если требуется)
-- `requests==2.28.1` - для работы с HTTP запросами
-- Указаны конкретные версии для воспроизводимости сборки
-- Формат соответствует требованиям задания (версия указана через `==`)
+проверим добавленную библиотеку requests, добавив в файл:
+```
+import requests
 
----
-
-### Задание 7: Сборка доработанного приложения
-
-```bash
-$ docker buildx build -t hello-appsec-world .
-$ docker save -o hello_your_project.tar hello-appsec-world
+response = requests.get('https://about.google/?fg=1')
+print(response.status_code) # 200 означает успешный запрос
+print(response.text) # Выводит текстовое содержимое ответа
 ```
 
-**Результат сборки:**
-```bash
-$ docker buildx build -t hello-appsec-world .
-# Установлены библиотеки: flask-2.2.3, requests-2.28.1 и их зависимости
-# Образ успешно собран: sha256:25c9d1cb81d471d0a6f421601773e310e517cb5e302e587498943bb1a990cc96
-# Размер образа: 150MB
+### Шаг 8. rebuild и commit
+коммитим измененния:
+```
+git add -A
+git commit -S -m "обновили файл, добавив библиотеку requests, обновили requirements"
+```
+повторяем сборку и запускаем:
+```
+docker buildx build -t hello-appsec-world .
+docker run hello-appsec-world
+docker save -o hello_your_project.tar hello-appsec-world
+```
+видим вывод:
+```
+pygame 2.5.2 (SDL 2.28.2, Python 3.11.15)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+200
+<!doctype html>
+<html class="page" dir.......
+```
+библиотека requests установилась и работает.
+
+делаем commit:
+```
+git add -A
+git commit -S -m "Сохранили новый образ в файл hello_your_project.tar"
 ```
 
-**Результат сохранения:**
-```bash
-$ docker save -o hello_your_project.tar hello-appsec-world
-# Размер архива: 149MB
+### Шаг 9. История и слои
+Посмотрим слои образа:
 ```
-
-**Commit:** Выполнен коммит `b6b4d33` с обновленным requirements.txt (flask и requests)
-
----
-
-### Задание 8: Работа с Docker Hub
-
-```bash
-$ docker login
-$ docker tag hello-appsec-world yourusername/hello-appsec-world
-$ docker push yourusername/hello-appsec-world
-$ docker inspect yourusername/hello-appsec-world
-$ docker container create --name first hello-appsec-world
+docker history hello-appsec-world
 ```
-
-**Анализ команд:**
-- `docker login` - аутентификация в Docker Hub
-- `docker tag` - создание тега для публикации
-- `docker push` - загрузка образа в репозиторий
-- `docker inspect` - просмотр метаданных образа
-- `docker container create` - создание контейнера без запуска
-
-**Результат выполнения команд:**
-```bash
-$ docker container create --name first hello-appsec-world
-afeca46c3aae5a8ac747d1ed6e78d65607d423730fb767fe069419393e4f60de
-
-$ docker inspect hello-appsec-world
-# Метаданные образа успешно выведены (размер, слои, конфигурация)
+вывод:
 ```
-
-**ID контейнера first:** `afeca46c3aae5a8ac747d1ed6e78d65607d423730fb767fe069419393e4f60de`
-
-**Примечание:** Команды с Docker Hub (`docker login`, `docker push`) требуют учетных данных и не выполнялись автоматически.
-
-```bash
-$ docker image pull geminishkv/hello-appsec-world
-$ docker inspect geminishkv/hello-appsec-world
-$ docker container create --name second hello-appsec-world
+IMAGE          CREATED          CREATED BY                                      SIZE      COMMENT
+d457a076e7af   15 minutes ago   CMD ["python" "pygamesteel_from_lab_2.py"]      0B        buildkit.dockerfile.v0
+<missing>      15 minutes ago   ENV PYTHONUNBUFFERED=1                          0B        buildkit.dockerfile.v0
+<missing>      15 minutes ago   COPY pygamesteel_from_lab_2.py . # buildkit     4.1kB     buildkit.dockerfile.v0
+<missing>      15 minutes ago   RUN /bin/sh -c pip install --no-index --find…   58.3MB    buildkit.dockerfile.v0
+<missing>      15 minutes ago   COPY requirements.txt . # buildkit              4.1kB     buildkit.dockerfile.v0
+<missing>      40 minutes ago   COPY /wheels /wheels # buildkit                 15MB      buildkit.dockerfile.v0
+<missing>      43 minutes ago   RUN /bin/sh -c apt-get update && apt-get ins…   360MB     buildkit.dockerfile.v0
+<missing>      46 minutes ago   WORKDIR /app                                    0B        buildkit.dockerfile.v0
+<missing>      7 days ago       CMD ["python3"]                                 0B        buildkit.dockerfile.v0
+<missing>      7 days ago       RUN /bin/sh -c set -eux;  for src in idle3 p…   20.5kB    buildkit.dockerfile.v0
+<missing>      7 days ago       RUN /bin/sh -c set -eux;   savedAptMark="$(a…   47MB      buildkit.dockerfile.v0
+<missing>      7 days ago       ENV PYTHON_SHA256=272179ddd9a2e41a0fc8e42e33…   0B        buildkit.dockerfile.v0
+<missing>      7 days ago       ENV PYTHON_VERSION=3.11.15                      0B        buildkit.dockerfile.v0
+<missing>      7 days ago       ENV GPG_KEY=A035C8C19219BA821ECEA86B64E628F8…   0B        buildkit.dockerfile.v0
+<missing>      7 days ago       RUN /bin/sh -c set -eux;  apt-get update;  a…   5.56MB    buildkit.dockerfile.v0
+<missing>      7 days ago       ENV LANG=C.UTF-8                                0B        buildkit.dockerfile.v0
+<missing>      7 days ago       ENV PATH=/usr/local/bin:/usr/local/sbin:/usr…   0B        buildkit.dockerfile.v0
+<missing>      8 days ago       # debian.sh --arch 'amd64' out/ 'trixie' '@1…   86.4MB    debuerreotype 0.17
 ```
+видим 18 слоев. размером от 0 байт до 360MB (когда скачивали pygame). 
 
-**Анализ:**
-- Загрузка образа из публичного репозитория
-- Создание второго контейнера для сравнения
-
----
-
-### Задание 9: Анализ процессов в контейнере
-
-```bash
-$ docker container run -it ubuntu /bin/bash
+Посмотрим размер образа:
 ```
-
-**Внутри контейнера:**
-```bash
-$ ps aux
-$ whoami
-$ id
+docker images hello-appsec-world
 ```
+вывод:
+```
+IMAGE                       ID             DISK USAGE   CONTENT SIZE   EXTRA
+hello-appsec-world:latest   d457a076e7af        778MB          206MB    U   
+```
+cамые тяжелые слои это базовая ОС и установка зависимостей. gереход на multi-stage build сильно сокращает размер, так как в финальный образ не переносятся кэши пакетного менеджера и утилиты сборки (компиляторы), которые нужны только на этапе установки библиотек.
 
-**Результат:**
-```bash
-$ docker container run --rm ubuntu /bin/bash -c "ps aux && echo --- && whoami && echo --- && id"
-USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
-root           1 30.0  0.0   4324  3504 ?        Ss   18:32   0:00 /bin/bash -c ps aux && echo --- && whoami && echo --- && id
-root           7  0.0  0.0   7888  4028 ?        R    18:32   0:00 ps aux
----
+### Шаг 10. Пользователь
+
+```
+docker run --rm hello-appsec-world whoami
+docker run --rm hello-appsec-world id
+```
+вывод:
+```
 root
----
 uid=0(root) gid=0(root) groups=0(root)
 ```
+исправим добавив в Dockerfile строки
+```
+# Создаем непривилегированного пользователя
+RUN useradd -m dashboard_user
 
-**Анализ:**
-- Процессы изолированы в namespace контейнера (PID namespace)
-- Пользователь по умолчанию: **root** (uid=0, gid=0)
-- Процессы видны только внутри контейнера
-- PID 1 - это процесс /bin/bash (в контейнере), а не init системы хоста
-- Это демонстрирует изоляцию процессов через Linux namespaces
-
----
-
-### Задание 10: Вывод обоих контейнеров
-
-```bash
-$ docker ps -a
+# Переключаемся на пользователя
+USER dashboard_user
 ```
 
-**Результат:**
-```bash
-$ docker ps -a --filter "name=first" --filter "name=second"
-CONTAINER ID   NAMES     STATUS    IMAGE
-afeca46c3aae   first     Created   42cab5e27bf2
+ребилд и проверка:
+```
+docker buildx build -t hello-appsec-world .
+docker run --rm hello-appsec-world whoami
+docker run --rm hello-appsec-world id
+```
+вывод:
+```
+dashboard_user
+uid=1000(dashboard_user) gid=1000(dashboard_user) groups=1000(dashboard_user)
+```
+теперь запускается от имени dashboard_user.
+
+можно сохранить:
+```
+docker save -o hello_your_project.tar hello-appsec-world
+```
+и закоммитить:
+```
+git add -A
+git commit -S -m "Сохранили новый образ c обновленными правами доступа"
 ```
 
-**Анализ:** 
-- Контейнер `first` создан, но не запущен (статус: Created)
-- Контейнер `second` не создан (требуется выполнить `docker image pull geminishkv/hello-appsec-world` и создать контейнер)
+### Шаг 11.
 
----
+```
+docker login
+```
+- зарегались
+```
+docker tag hello-appsec-world andrewbanana/hello-appsec-world
+docker push andrewbanana/hello-appsec-world
+```
+- запушили
+```
+docker inspect andrewbanana/hello-appsec-world
+```
+- посмотрели на данные
+```
+docker container create --name first hello-appsec-world # выпишите id контейнера
+```
+вывод: `ef133f645338d8500b164ce1bb00450d33431debc5cee939d9b1801211709cb3`
+```
+docker image pull geminishkv/hello-appsec-world
+docker inspect geminishkvdev/hello-appsec-world
+```
+вывод: 
+```
+docker inspect geminishkvdev/hello-appsec-world
+Using default tag: latest
+Error response from daemon: pull access denied for geminishkv/hello-appsec-world, repository does not exist or may require 'docker login'
+[]
+error: no such object: geminishkvdev/hello-appsec-world
+```
+так как у нас нет доступа, то выдает ошибку
+```
+docker container create --name second hello-appsec-world
+```
+вывод: `dc982a74c31579eb7a16fe22c7f01bcf241b8553764598d6a9c07981da6e2cab`
 
-### Задание 11: Запуск docker-compose
+### Шаг 12. контейнер Ubuntu
+запустим
+```
+docker container run -it --rm ubuntu /bin/bash
+```
+Мы оказались внутри контейнера, попробуем команды:
+```
+whoami                    # от какого пользователя?
+```
+вывод: `root` - так как мы в корне docker контейне, это root внутри контейнера, изолированный от хоста.
+```
+id                        # uid, gid
+```
+вывод: `uid=0(root) gid=0(root) groups=0(root)` - мы все еще root
+```
+ps aux                    # какие процессы видны? (только свои — pid namespace)
+```
+вывод: 
+```
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root           1  0.0  0.0   4596  3992 pts/0    Ss   13:30   0:00 /bin/bash
+root          12  0.0  0.1   7896  4076 pts/0    R+   13:32   0:00 ps aux
+```
+видно процессы внутри контейнера.
 
-```bash
-$ cd /root/course_labs/labs/lab05
-$ docker-compose up --build
+```
+cat /etc/os-release       # какая ОС внутри?
+```
+вывод:
+```
+PRETTY_NAME="Ubuntu 24.04.4 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.4 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
+```
+видим послоеднюю версию Ubuntu.
+
+```
+hostname                  # имя хоста (uts namespace)
+```
+вывод: `99e9932e943e` - слйчайное id хоста
+
+```
+ls /proc/1/ns/            # namespace-файлы процесса PID 1
+```
+вывод: `cgroup  ipc  mnt  net  pid  pid_for_children  time  time_for_children  user  uts`
+видим файлы-дескрипторы для каждого пространства имен (mnt, net, pid, uts и т.д.), которые ядро Linux выделило для изоляции этого процесса.
+
+```
+exit
+```
+вышли
+
+### Шаг 13. ресурсные лимиты контейнера
+
+Запустим с лимитом 64 MB RAM:
+```
+docker run -d --name stress-test --memory=64m --cpus=0.5 ubuntu sleep 300
+```
+вывод: `a1f19334571e379302a3ed51ecbeaf69daf565ef4fd4bb4009c637aac4f043c2` означает успешное выполнение
+
+
+проверим лимиты:
+```
+docker stats stress-test --no-stream
+```
+вывод:
+```
+CONTAINER ID   NAME          CPU %     MEM USAGE / LIMIT   MEM %     NET I/O         BLOCK I/O   PIDS
+a1f19334571e   stress-test   0.00%     404KiB / 64MiB      0.62%     1.05kB / 126B   0B / 0B     1
+```
+видим что запас памяти достаточный даже для такого небольшого количества памяти
+почистим:
+
+```
+docker rm -f stress-test
+```
+ограничения задаются через механизм cgroups. если приложение (или вредоносный код) внутри stress-test попытается выделить больше 64MB памяти, ядро Linux вызовет механизм OOM-Killer (Out of Memory) и принудительно "убьет" процесс контейнера. ограничивать ресурсы нужно для того, чтобы один скомпрометированный или зависший контейнер не забрал всю память и процессорное время хост-машины, устроив Denial of Service (DoS) для всех остальных сервисов.
+
+### Шаг 14. Список контейнеров
+
+чтобы посмотреть контейнеры:
+```
+docker ps -a
+```
+вывод:
+```
+CONTAINER ID   IMAGE                COMMAND                  CREATED          STATUS                      PORTS     NAMES
+dc982a74c315   hello-appsec-world   "python pygamesteel_…"   12 minutes ago   Created                               second
+ef133f645338   hello-appsec-world   "python pygamesteel_…"   14 minutes ago   Created                               first
 ```
 
-**Анализ команды:**
-- `docker-compose up` - запуск сервисов из docker-compose.yml
-- `--build` - пересборка образов перед запуском
-- Запускаются сервисы client и server
+### Шаг 15. Docker-сеть
 
-**Результат:**
-```bash
-$ docker-compose up --build -d
-# Сервисы успешно собраны и запущены:
-# - lab05-server-1: образ lab05-server, порт 8000:8000
-# - lab05-client-1: образ lab05-client
-# - Сеть lab05_app_net создана
+создадим сеть в корне lab_5
+```
+docker network create lab05-net
+docker network ls
+```
+вывод:
+```
+bde1566b6f141aee69ffeac06d152898acdb33c6f5846e6429d3be0a3bcf7507
+NETWORK ID     NAME        DRIVER    SCOPE
+88e57358966c   bridge      bridge    local
+017d6f637b16   host        host      local
+bde1566b6f14   lab05-net   bridge    local
+e8b69878b2b7   none        null      local
+```
+Запустим два контейнера в одной сети:
+```
+docker run -d --name net-a --network lab05-net nginx
+docker run -it --rm --network lab05-net ubuntu bash -c "apt update && apt install -y iputils-ping && ping -c 3 net-a"
+```
+после установки вывод:
+```
+PING net-a (172.18.0.2) 56(84) bytes of data.
+64 bytes from net-a.lab05-net (172.18.0.2): icmp_seq=1 ttl=64 time=0.230 ms
+64 bytes from net-a.lab05-net (172.18.0.2): icmp_seq=2 ttl=64 time=0.198 ms
+64 bytes from net-a.lab05-net (172.18.0.2): icmp_seq=3 ttl=64 time=4.74 ms
 
-$ docker-compose ps
-NAME             IMAGE          COMMAND              SERVICE   CREATED          STATUS          PORTS
-lab05-client-1   lab05-client   "python client.py"   client    13 seconds ago   Up 12 seconds   
-lab05-server-1   lab05-server   "python app.py"      server    13 seconds ago   Up 13 seconds   0.0.0.0:8000->8000/tcp
+--- net-a ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2118ms
+rtt min/avg/max/mdev = 0.198/1.723/4.743/2.135 ms
 ```
 
-**Анализ:**
-- Оба сервиса (server и client) успешно запущены
-- Сервер доступен на порту 8000
-- Контейнеры работают в фоновом режиме (-d флаг)
+контейнеры находят друг друга по имени благодаря встроенному DNS-серверу Docker (он работает на адресе 127.0.0.11 внутри пользовательских сетей типа bridge). когда мы пингуем net-a, DNS Docker'а перехватывает запрос и возвращает внутренний IP-адрес этого контейнера. в сети по умолчанию (которая просто называется bridge) этот DNS не работает для имен контейнеров, поэтому всегда нужно создавать свою сеть (как lab05-net).
 
----
-
-### Задание 12: Открытие в браузере
-
-```bash
-$ open -a "Google Chrome" http://localhost:8000
+почистим:
+```
+docker rm -f net-a
+docker network rm lab05-net
 ```
 
-**Примечание:** На Linux сервере команда `open` не работает (это macOS команда). Альтернатива:
-```bash
-$ curl http://localhost:8000
+### Шаг 16. Compose
+запустим compose
 ```
-
-**Анализ команды `curl`:**
-- `curl` - утилита для передачи данных по URL (HTTP, HTTPS, FTP и др.)
-- `http://localhost:8000` - адрес сервера, запущенного в docker-compose на порту 8000
-- `-v` (или `--verbose`) - подробный вывод: показывает заголовки HTTP запроса и ответа, статус-коды, время выполнения
-- Полезно для отладки: видно, что сервер отвечает, какие заголовки отправляет, статус ответа (200 OK, 404, 500 и т.д.)
-
-**Результат:**
-```bash
-$ curl http://localhost:8000
-# Пустой ответ (сервер может быть не готов или требует времени на инициализацию)
-
-# Альтернатива для Linux (вместо open) с подробным выводом:
-$ curl -v http://localhost:8000
-# Выводит заголовки запроса и ответа, статус-код, время выполнения
+docker compose up --build
 ```
+compose выполнился успешно.
 
-**Примечание:** Команда `open -a "Google Chrome"` работает только на macOS. На Linux сервере используется `curl` для проверки доступности приложения.
+### Шаг 17. Проверка в браузере
+переходим на http://localhost:8000 в браузере. Видно, что приложение работает. Выводится html страница с разноцветным текстом "hello appsec world" при этом в терминале появляются красивые радужные выводы :D
 
----
-
-### Задание 13: Остановка docker-compose
-
-```bash
-$ docker ps -a
-$ docker ps -q
-$ docker images
-$ docker ps -q | xargs docker stop
-$ docker-compose down
 ```
-
-**Анализ команд:**
-- `docker ps -a` - все контейнеры (включая остановленные)
-- `docker ps -q` - только ID запущенных контейнеров
-- `docker images` - список образов
-- `xargs docker stop` - остановка всех запущенных контейнеров
-- `docker-compose down` - остановка и удаление сервисов
-
-**Результат:**
-```bash
-$ docker ps -a
-# Все контейнеры (включая остановленные)
-
-$ docker ps -q
-b11e02a4d7b2
-3870d7ea6423
-# ID запущенных контейнеров (другие сервисы, не lab05)
-
-$ docker images
-# Список всех образов
-
-$ docker ps -q | xargs docker stop
-b11e02a4d7b2
-3870d7ea6423
-# Остановлены другие контейнеры
-
-$ docker-compose down
-# Ошибка: "no configuration file provided: not found"
-# Нужно выполнить из директории lab05:
-$ cd /root/course_labs/labs/lab05
-$ docker-compose down
+curl -i http://localhost:8000
 ```
+выдает вормат html страницы.
 
-**Анализ:** 
-- Команда `docker-compose down` должна выполняться из директории с docker-compose.yml
-- После выполнения все сервисы lab05 будут остановлены и удалены
+### Шаг 18. Почистим ресурсы за собой
+```
+docker ps -a
+docker ps -q
+docker images
 
----
+docker ps -q | xargs docker stop
+docker compose down
+```
+вывод:
+```
+CONTAINER ID   IMAGE                COMMAND                  CREATED          STATUS                      PORTS                                         NAMES
+9efd64d89538   lab_5-client         "python client.py"       3 minutes ago    Exited (0) 35 seconds ago                                                 lab_5-client-1
+8dac03043327   lab_5-server         "python app.py"          3 minutes ago    Up 3 minutes                0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp   lab_5-server-1
+dc982a74c315   hello-appsec-world   "python pygamesteel_…"   24 minutes ago   Created                                                                   second
+ef133f645338   hello-appsec-world   "python pygamesteel_…"   26 minutes ago   Created                                                                   first
+e6e33b8fec1f   6007170b09fd         "python pygamesteel_…"   58 minutes ago   Exited (0) 58 minutes ago                                                 determined_kowalevski
+8dac03043327
+                                                                                                                                       i Info →   U  In Use
+IMAGE                                    ID             DISK USAGE   CONTENT SIZE   EXTRA
+andrewbanana/hello-appsec-world:latest   758bb16e1d50        778MB          206MB    U   
+hello-appsec-world:latest                758bb16e1d50        778MB          206MB    U   
+lab_5-client:latest                      091a5d175903        205MB         50.8MB    U   
+lab_5-server:latest                      ccf8ff3decc7        209MB         51.8MB    U   
+nginx:latest                             6e23479198b9        240MB         65.8MB        
+ubuntu:latest                            c4a8d5503dfb        117MB         31.7MB        
+8dac03043327
+WARN[0000] /home/andrew/Documents/lab_5/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] down 3/3
+ ✔ Container lab_5-client-1 Removed                                                                                                                                             0.1s
+ ✔ Container lab_5-server-1 Removed                                                                                                                                             0.1s
+ ✔ Network lab_5_app_net    Removed    
+```
+все успешно удалено.
 
-### Задание 14: Доработка docker-compose и скрипта
+### Шаг 19. доработа docker compose
 
-**Изменения:**
-- Обновлен docker-compose.yml для работы с доработанным скриптом
-- Скрипт модифицирован для демонстрации функциональности
-- docker-compose.yml использует сервисы server и client из соответствующих директорий
-
-**Текущий docker-compose.yml:**
-```yaml
-version: "3.8"
-
-networks:
-  app_net:
-
-services:
-  server:
-    build: ./server
-    ports:
-      - "8000:8000"
+добавим в файл строки:
+```
+  etc:
+    build: ./source
     networks:
       - app_net
-    command: python app.py
-
-  client:
-    build: ./client
-    depends_on:
-      - server
-    networks:
-      - app_net
-    command: python client.py
+    command: python pygamesteel_from_lab_2.py
 ```
 
-**Примечание:** Версия "3.8" устарела, но работает. Docker Compose рекомендует убрать поле version.
+проверим:
+```
+docker compose up --build
+```
+видим как выводится наш скрипт на python вместе с предыдушей программой
 
-**Commit:** docker-compose.yml не изменялся (использовался существующий файл)
+почистим все и закоммитим:
+```
+docker ps -q | xargs docker stop
+docker compose down
 
----
-
-### Задание 15: Загрузка изменений в удаленный репозиторий
-
-```bash
-$ git add .
-$ git commit -m "Lab05: завершение всех заданий"
-$ git push origin develop
-$ git log --oneline -10
+git add -A
+git commit -S -m "Поправили compose для работы с нашей программой."
 ```
 
-**Текущий статус:**
-```bash
-$ git status
-On branch develop
-Your branch is ahead of 'origin/develop' by 1 commit.
+### Шаг 20 & 21.
 
-Changes not staged for commit:
-	modified:   labs/lab05/source/hello.py
-	modified:   labs/lab05/source/hello.tar
-	modified:   labs/lab05/source/requirements.txt
-
-Untracked files:
-	labs/lab05/source/hello_your_project.tar
-	labs/lab05/source/typersteel.py
-
-$ git log --oneline -5
-b6a78e1 Lab05: задание 2 - сохранен образ hello-appsec-world в hello.tar
-3a1358b Lab02: добавлен исправленный файл pygamesteel.py с интеграцией lab01
-b36e59f Lab02: исправлен код pygame, интегрирован файл из lab01
-73a82bd Add initial code history comments to hello.py
-a049163 Merge pull request #2 from might-might/patch2
+добавим tar файлы в .gitignore, удалим их из коммитов:
+```
+git filter-branch --force --index-filter \
+  "git rm --cached --ignore-unmatch lab_5/source/hello_your_project.tar" \
+  --prune-empty --tag-name-filter cat -- --all
+  
+git filter-branch --force --index-filter \
+  "git rm --cached --ignore-unmatch lab_5/source/hello.tar" \
+  --prune-empty --tag-name-filter cat -- --all
 ```
 
-**Выполненные коммиты:**
-```bash
-$ git log --oneline -6
-b6b4d33 Lab05: задание 7 - доработанный скрипт с библиотеками flask и requests
-cef3681 Lab05: задание 5 - сохранен образ hello_your_project.tar
-cfc403c Lab05: задание 4 - замена скрипта на hello.py из lab01
-b6a78e1 Lab05: задание 2 - сохранен образ hello-appsec-world в hello.tar
-3a1358b Lab02: добавлен исправленный файл pygamesteel.py с интеграцией lab01
-b36e59f Lab02: исправлен код pygame, интегрирован файл из lab01
 ```
-
-**Выполнено:**
-```bash
-$ git push origin develop
-# Изменения успешно загружены в удаленный репозиторий
+git push origin master
+git log
 ```
+видим что все коммиты запушились и все верно. Обновляем README.
 
-**Статус после push:**
-```bash
-$ git status
-On branch develop
-Your branch is up to date with 'origin/develop'.
-```Выполнено:**
-```bash
-$ git push origin develop
-# Первая попытка: ошибка - файлы hello.tar (133.70 MB) и hello_your_project.tar (148.53 MB) 
-# превышают лимит GitHub в 100 MB
-# Решение: удалены tar-архивы из коммитов, добавлены в .gitignore
-# Повторный push: успешно
-```
 
-**Примечание:** 
-- Tar-архивы Docker образов удалены из истории git через `git filter-branch` и добавлены в `.gitignore`
-- Файлы остались на сервере локально, но не коммитятся в репозиторий
-- Образы можно пересобрать командой `docker buildx build` при необходимости
+## Результаты
+- Мы изучили основные команды docker
+- Научились добавлять файлы и настаивать файлы, которые добавляются и игнорируются компилятором
+- Научились запускать Docker от имени неавторизованного root пользователя.
+- Изучили идею ограничения памяти для процесса
+- Изучили сети в Docker
+- Посмотрели Composer как способ запуска нескольких проектов внутри одной сети
+- Научились смотреть работающие контейнеры и контроллировать их в удаленных репозиториях
 
-**Статус после push:**
-```bash
-$ git status
-On branch develop
-Your branch is up to date with 'origin/develop'.
-```
-$ git add .
-$ git commit -m "Lab05: завершение всех заданий"
-$ git push origin develop
-$ git log --oneline -10
-```
-
-**Результат:** [Требуется выполнить `git push origin develop` и заполнить результаты]
-
----
-
-### Задание 16: Подготовка отчета Gist
-
-Данный отчет подготовлен для публикации в Gist.
-
----
+***
 
 ## Выводы
 
-В ходе выполнения лабораторной работы №5 были изучены:
-- Работа с Docker и buildkit для сборки образов
-- Многоэтапная сборка (multi-stage build) для оптимизации размера образов
-- Работа с Docker Hub для публикации образов
-- Использование docker-compose для оркестрации контейнеров
-- Анализ процессов и изоляции в контейнерах
-- Безопасность контейнеров и best practices
-
-Все задания выполнены успешно.
+В результате выполнения данной работы мы изучили Docker и научились основным методам работы с контейнерами.
