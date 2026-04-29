@@ -19,3 +19,9 @@ services:
     networks:
       - app_net
     command: python client.py
+
+  etc:
+    build: ./source
+    networks:
+      - app_net
+    command: python pygamesteel_from_lab_2.py
