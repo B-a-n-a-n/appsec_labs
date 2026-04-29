@@ -1,5 +1,10 @@
 import pygame
 import os
+import requests
+
+response = requests.get('https://about.google/?fg=1')
+print(response.status_code) # 200 означает успешный запрос
+print(response.text) # Выводит текстовое содержимое ответа
 
 # Фикс для запуска в Docker без X-сервера (монитора)
 os.environ['SDL_VIDEODRIVER'] = 'dummy'
